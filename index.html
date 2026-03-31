@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>復刻活動抽卡紀錄</title>
+<style>
+body { font-family: Arial, sans-serif; background-color: #F3E5F5; padding: 20px; }
+h2 { text-align: center; }
+input, select, button { margin: 5px; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th, td { border: 1px solid #999; padding: 5px; text-align: center; }
+
+.夏彥 { color: #FFFF00; font-weight: bold; }
+.左然 { color: #FF4500; font-weight: bold; }
+.莫弈 { color: #32CD32; font-weight: bold; }
+.陸景和 { color: #BA55D3; font-weight: bold; }
+
+.warning { color: red; font-weight: bold; }
+
+.statusBox {
+  margin-top: 10px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #ccc;
+}
+</style>
+</head>
+<body>
+
+<h2>復刻活動抽卡紀錄</h2>
+
+<!-- 活動 -->
+<div>
+<label>活動名稱: <input type="text" id="eventName"></label>
+<label>SSR已抽: <input type="number" id="SSRDrawn" value="0"></label>
+<label>SSS已抽: <input type="number" id="SSSDrawn" value="0"></label>
+<button onclick="addEvent()">新增/更新活動</button>
+</div>
+
+<div>
+<label>選擇活動:
+<select id="eventSelect" onchange="loadEventData()"></select>
+</label>
+<button onclick="deleteEvent()">刪除活動</button>
+</div>
+
+<!-- 保底顯示 -->
+<div class="statusBox">
+目前保底：
+<span id="SSRStatus">SSR：100</span> |
+<span id="SSSStatus">SSS：100</span>
+</div>
+
+<!-- 抽卡 -->
+<div>
+<label>男主:
+<select id="characterSelect">
+<option>夏彥</option>
+<option>左然</option>
+<option>莫弈</option>
+<option>陸景和</option>
+</select>
+</label>
+
+<label>稀有度:
+<select id="raritySelect">
+<option>SSR</option>
+<option>SSS</option>
+</select>
+</label>
+
+<label>抽數: <input type="number" id="drawCount" value="1"></label>
+<label>活動卡: <input type="checkbox" id="isEventCard"></label>
+
+<button onclick="addDraw()">記錄</button>
+</div>
+
+<!-- 表格 -->
+<table>
+<thead>
+<tr>
+<th>活動</th>
+<th>男主</th>
+<th>稀有度</th>
+<th>抽數</th>
+<th>SSR剩餘</th>
+<th>SSS剩餘</th>
+<th>操作</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+<script>
+let events = JSON.parse(localStorage.getItem('eventsData') || '{}');
+let records = JSON.parse(localStorage.getItem('recordsData') || '[]');
+
+function save(){
+localStorage.setItem('eventsData', JSON.stringify(events));
+localStorage.setItem('recordsData', JSON.stringify(records));
+}
+
+function updateSelect(){
+const sel = document.getElementById('eventSelect');
+sel.innerHTML = '<option value="">請選擇</option>';
+for(let e in events){
+let o = document.createElement('option');
+o.value = e;
+o.textContent = e;
+sel.appendChild(o);
+}
+}
+
+// 新增活動
+function addEvent(){
+const name = eventName.value.trim();
+if(!name) return alert('請輸入名稱');
+
+events[name] = {
+SSRDrawn: parseInt(SSRDrawn.value)||0,
+SSSDrawn: parseInt(SSSDrawn.value)||0
+};
+
+save();
+updateSelect();
+}
+
+// 刪除活動
+function deleteEvent(){
+const name = eventSelect.value;
+if(!name) return;
+
+delete events[name];
+records = records.filter(r=>r.event!==name);
+
+save();
+updateSelect();
+loadEventData();
+}
+
+// 計算保底（核心修正）
+function calcRemain(drawn){
+let remain = 100 - drawn;
+if(remain <= 0) remain = 100;
+return remain;
+}
+
+// 顯示上方保底
+function updateStatus(e){
+if(!e) return;
+const data = events[e];
+let SSR = calcRemain(data.SSRDrawn);
+let SSS = calcRemain(data.SSSDrawn);
+
+SSRStatus.textContent = "SSR：" + SSR;
+SSSStatus.textContent = "SSS：" + SSS;
+
+if(SSR<=10) SSRStatus.className="warning"; else SSRStatus.className="";
+if(SSS<=10) SSSStatus.className="warning"; else SSSStatus.className="";
+}
+
+// 記錄抽卡
+function addDraw(){
+const e = eventSelect.value;
+if(!e) return alert('選活動');
+
+const char = characterSelect.value;
+const rarity = raritySelect.value;
+const count = parseInt(drawCount.value);
+const isEvent = isEventCard.checked;
+
+let data = events[e];
+
+// 更新抽數
+if(rarity==="SSR"){
+if(isEvent) data.SSRDrawn = 0;
+else data.SSRDrawn += count;
+}else{
+if(isEvent) data.SSSDrawn = 0;
+else data.SSSDrawn += count;
+}
+
+// 計算最新保底
+let SSRRemain = calcRemain(data.SSRDrawn);
+let SSSRemain = calcRemain(data.SSSDrawn);
+
+// 存紀錄
+records.push({
+event:e,
+character:char,
+rarity,
+drawCount:count,
+SSRRemain,
+SSSRemain
+});
+
+save();
+loadEventData();
+}
+
+// 載入
+function loadEventData(){
+const tbody = document.getElementById('tbody');
+tbody.innerHTML = '';
+
+const e = eventSelect.value;
+updateStatus(e);
+
+records.forEach((r,i)=>{
+if(e && r.event!==e) return;
+
+let tr = document.createElement('tr');
+
+tr.innerHTML = `
+<td>${r.event}</td>
+<td class="${r.character}">${r.character}</td>
+<td>${r.rarity}</td>
+<td>${r.drawCount}</td>
+<td class="${r.SSRRemain<=10?'warning':''}">${r.SSRRemain}</td>
+<td class="${r.SSSRemain<=10?'warning':''}">${r.SSSRemain}</td>
+<td>
+<button onclick="del(${i})">刪</button>
+</td>
+`;
+
+tbody.appendChild(tr);
+});
+}
+
+// 刪除紀錄
+function del(i){
+let r = records[i];
+let data = events[r.event];
+
+if(r.rarity==="SSR") data.SSRDrawn -= r.drawCount;
+else data.SSSDrawn -= r.drawCount;
+
+if(data.SSRDrawn<0) data.SSRDrawn=0;
+if(data.SSSDrawn<0) data.SSSDrawn=0;
+
+records.splice(i,1);
+
+save();
+loadEventData();
+}
+
+// 初始化
+updateSelect();
+loadEventData();
+</script>
+
+</body>
+</html>
